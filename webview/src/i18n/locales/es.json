@@ -95,6 +95,11 @@
     "basic": {
       "title": "Configuración básica",
       "description": "Configurar tema de página, idioma y entorno de ejecución Node.js",
+      "tabs": {
+        "appearance": "Apariencia",
+        "behavior": "Comportamiento",
+        "environment": "Entorno"
+      },
       "theme": {
         "label": "Tema de interfaz",
         "system": "Seguir IDE",
@@ -151,7 +156,7 @@
         "label": "Auto Open File",
         "enabled": "Enabled",
         "disabled": "Disabled",
-        "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
+        "hint": "Al activar, seleccionar un archivo en el árbol del proyecto enviará automáticamente su ruta al AI (nota: solo se envía la ruta del archivo, no su contenido). Al desactivar, se requiere acción manual."
       },
       "diffExpanded": {
         "label": "Expandir diferencias por defecto",

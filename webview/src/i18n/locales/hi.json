@@ -95,6 +95,11 @@
     "basic": {
       "title": "बुनियादी कॉन्फ़िगरेशन",
       "description": "पेज थीम, भाषा और Node.js रनटाइम वातावरण कॉन्फ़िगर करें",
+      "tabs": {
+        "appearance": "दिखावट",
+        "behavior": "व्यवहार",
+        "environment": "वातावरण"
+      },
       "theme": {
         "label": "इंटरफ़ेस थीम",
         "system": "Follow IDE",
@@ -151,7 +156,7 @@
         "label": "Auto Open File",
         "enabled": "Enabled",
         "disabled": "Disabled",
-        "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
+        "hint": "सक्षम होने पर, प्रोजेक्ट ट्री में फ़ाइल चुनने पर उसका फ़ाइल पथ स्वचालित रूप से AI को भेजा जाएगा (ध्यान दें: केवल फ़ाइल पथ भेजा जाता है, फ़ाइल सामग्री नहीं)। अक्षम होने पर मैन्युअल कार्रवाई आवश्यक है।"
       },
       "diffExpanded": {
         "label": "डिफ़ॉल्ट रूप से अंतर दिखाएं",

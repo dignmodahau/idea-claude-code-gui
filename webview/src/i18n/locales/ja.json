@@ -95,6 +95,11 @@
     "basic": {
       "title": "基本設定",
       "description": "ページテーマ、言語、Node.js環境を設定",
+      "tabs": {
+        "appearance": "外観",
+        "behavior": "動作",
+        "environment": "環境"
+      },
       "theme": {
         "label": "テーマ",
         "system": "IDE のテーマに従う",
@@ -151,7 +156,7 @@
         "label": "Auto Open File",
         "enabled": "Enabled",
         "disabled": "Disabled",
-        "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
+        "hint": "有効にすると、プロジェクトツリーでファイルを選択した際に自動的にファイルパスを AI に送信します（注意：ファイルパスのみ送信され、ファイル内容は送信されません）。無効時は手動操作が必要です。"
       },
       "diffExpanded": {
         "label": "差分をデフォルトで展開",

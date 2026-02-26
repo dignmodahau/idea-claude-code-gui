@@ -95,6 +95,11 @@
     "basic": {
       "title": "基礎配置",
       "description": "配置頁面主題、語言和 Node.js 執行環境",
+      "tabs": {
+        "appearance": "外觀",
+        "behavior": "行為",
+        "environment": "環境"
+      },
       "theme": {
         "label": "介面主題",
         "system": "跟隨 IDE",
@@ -151,7 +156,7 @@
         "label": "Auto Open File",
         "enabled": "Enabled",
         "disabled": "Disabled",
-        "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
+        "hint": "開啟後，在專案樹選擇檔案時會自動將檔案路徑告訴 AI（注意：只傳遞檔案路徑，不傳檔案內容）。關閉後需要手動操作。"
       },
       "diffExpanded": {
         "label": "預設展開差異",

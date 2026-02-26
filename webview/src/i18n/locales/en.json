@@ -95,6 +95,11 @@
     "basic": {
       "title": "Basic Configuration",
       "description": "Configure page theme, language and Node.js environment",
+      "tabs": {
+        "appearance": "Appearance",
+        "behavior": "Behavior",
+        "environment": "Environment"
+      },
       "theme": {
         "label": "Theme",
         "system": "Follow IDE",
@@ -151,7 +156,7 @@
         "label": "Auto Open File",
         "enabled": "Enabled",
         "disabled": "Disabled",
-        "hint": "When enabled, files will automatically open in the editor when selected in the project tree. When disabled, manual action is required to open files."
+        "hint": "When enabled, selecting a file in the project tree will automatically send its file path to AI (note: only the file path is sent, not the file content). When disabled, manual action is required."
       },
       "diffExpanded": {
         "label": "Expand Diffs by Default",

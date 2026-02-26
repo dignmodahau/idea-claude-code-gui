@@ -12,8 +12,55 @@
 
 .sectionDesc {
   color: var(--text-tertiary);
-  margin: 0 0 24px 0;
+  margin: 0 0 16px 0;
   font-size: 13px;
+}
+
+/* Basic config sub-tab selector */
+.basicTabSelector {
+  display: flex;
+  background: var(--bg-secondary);
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid var(--border-secondary);
+  margin-bottom: 20px;
+}
+
+.basicTabBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+  justify-content: center;
+
+  .codicon {
+    font-size: 14px;
+  }
+
+  &:hover {
+    background: var(--bg-hover);
+  }
+
+  &.active {
+    background: var(--button-primary-background, #0078d4);
+    color: #ffffff;
+
+    .codicon {
+      color: #ffffff;
+    }
+  }
+}
+
+.tabContent {
+  /* Tab content area */
 }
 
 .themeSection {

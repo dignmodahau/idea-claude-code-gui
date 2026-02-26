@@ -95,6 +95,11 @@
     "basic": {
       "title": "基础配置",
       "description": "配置页面主题、语言和 Node.js 运行环境",
+      "tabs": {
+        "appearance": "外观",
+        "behavior": "行为",
+        "environment": "环境"
+      },
       "theme": {
         "label": "界面主题",
         "system": "跟随 IDE",
@@ -151,7 +156,7 @@
         "label": "自动打开文件",
         "enabled": "已开启",
         "disabled": "已关闭",
-        "hint": "开启后，在项目树选择文件时会自动在编辑器中打开。关闭后需要手动操作才能打开文件。"
+        "hint": "开启后，在项目树选择文件时会自动将文件路径告诉 AI（注意：只传递文件路径，不传文件内容）。关闭后需要手动操作。"
       },
       "diffExpanded": {
         "label": "默认展开差异",
