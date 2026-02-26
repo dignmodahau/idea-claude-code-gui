@@ -592,13 +592,15 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     const sdkModelName = mapModelIdToSdkName(model);
     console.log('[DEBUG] Model mapping:', model, '->', sdkModelName);
 
+    // Load settings once for model resolution, thinking config, and streaming config
+    const settings = loadClaudeSettings();
+
     // FIX: Resolve the actual model name for API calls.
     // When the user configures a model mapping in their provider config (e.g. sonnet -> "MiniMax-M2.5"),
     // the mapped name is written to ~/.claude/settings.json as ANTHROPIC_DEFAULT_*_MODEL.
     // We must use that mapped name (not the internal ID like 'claude-sonnet-4-6') when calling the API,
     // otherwise third-party API proxies that don't recognize internal IDs will return 400 errors.
-    const settingsForModel = loadClaudeSettings();
-    const resolvedModel = resolveModelFromSettings(model, settingsForModel?.env);
+    const resolvedModel = resolveModelFromSettings(model, settings?.env);
     console.log('[DEBUG] Model resolved for API:', model, '->', resolvedModel);
     setModelEnvironmentVariables(resolvedModel, model);
 
@@ -624,8 +626,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 	    console.log('[PERM_DEBUG] shouldUseCanUseTool:', shouldUseCanUseTool);
 	    console.log('[PERM_DEBUG] canUseTool function defined:', typeof canUseTool);
 
-    // Read Extended Thinking configuration from settings.json
-    const settings = loadClaudeSettings();
+    // Read Extended Thinking configuration from settings.json (reuse `settings` loaded above)
     const alwaysThinkingEnabled = settings?.alwaysThinkingEnabled ?? true;
     const configuredMaxThinkingTokens = settings?.maxThinkingTokens
       || parseInt(process.env.MAX_THINKING_TOKENS || '0', 10)
@@ -1332,9 +1333,12 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     };
 
     const sdkModelName = mapModelIdToSdkName(model);
+
+    // Load settings once for model resolution, thinking config, and streaming config
+    const settings = loadClaudeSettings();
+
     // FIX: Resolve the actual model name from settings.json model mapping for third-party API proxies
-    const settingsForAttachModel = loadClaudeSettings();
-    const resolvedAttachModel = resolveModelFromSettings(model, settingsForAttachModel?.env);
+    const resolvedAttachModel = resolveModelFromSettings(model, settings?.env);
     console.log('[DEBUG] (withAttachments) Model resolved for API:', model, '->', resolvedAttachModel);
     setModelEnvironmentVariables(resolvedAttachModel, model);
     // No longer searching for system CLI; using SDK's built-in cli.js
@@ -1355,8 +1359,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     // Note: Per SDK docs, if no matcher is specified, the hook matches all tools.
     // We use a single global PreToolUse hook and let its internal logic decide which tools to auto-approve.
 
-    // Read Extended Thinking configuration from settings.json
-    const settings = loadClaudeSettings();
+    // Read Extended Thinking configuration from settings.json (reuse `settings` loaded above)
     const alwaysThinkingEnabled = settings?.alwaysThinkingEnabled ?? true;
     const configuredMaxThinkingTokens = settings?.maxThinkingTokens
       || parseInt(process.env.MAX_THINKING_TOKENS || '0', 10)

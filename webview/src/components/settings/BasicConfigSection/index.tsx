@@ -7,6 +7,12 @@ import EnvironmentTab from './EnvironmentTab';
 
 type BasicTab = 'appearance' | 'behavior' | 'environment';
 
+const BASIC_TABS: { key: BasicTab; icon: string; labelKey: string }[] = [
+  { key: 'appearance', icon: 'codicon-symbol-color', labelKey: 'settings.basic.tabs.appearance' },
+  { key: 'behavior', icon: 'codicon-gear', labelKey: 'settings.basic.tabs.behavior' },
+  { key: 'environment', icon: 'codicon-terminal', labelKey: 'settings.basic.tabs.environment' },
+];
+
 interface BasicConfigSectionProps {
   theme: 'light' | 'dark' | 'system';
   onThemeChange: (theme: 'light' | 'dark' | 'system') => void;
@@ -61,12 +67,6 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<BasicTab>('appearance');
 
-  const tabs: { key: BasicTab; icon: string; labelKey: string }[] = [
-    { key: 'appearance', icon: 'codicon-symbol-color', labelKey: 'settings.basic.tabs.appearance' },
-    { key: 'behavior', icon: 'codicon-gear', labelKey: 'settings.basic.tabs.behavior' },
-    { key: 'environment', icon: 'codicon-terminal', labelKey: 'settings.basic.tabs.environment' },
-  ];
-
   return (
     <div className={styles.configSection}>
       <h3 className={styles.sectionTitle}>{t('settings.basic.title')}</h3>
@@ -74,7 +74,7 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
 
       {/* Tab selector */}
       <div className={styles.basicTabSelector}>
-        {tabs.map((tab) => (
+        {BASIC_TABS.map((tab) => (
           <button
             key={tab.key}
             className={`${styles.basicTabBtn} ${activeTab === tab.key ? styles.active : ''}`}

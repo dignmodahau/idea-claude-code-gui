@@ -61,15 +61,17 @@ export function resolveModelFromSettings(modelId, userEnv) {
     if (mapped && String(mapped).trim()) {
       return String(mapped).trim();
     }
-  } else {
-    // Covers 'sonnet' and any non-Anthropic model names (e.g. 'qwen3.5-plus', 'deepseek-v3')
-    // Since mapModelIdToSdkName() defaults to 'sonnet' for unknown models,
-    // we check ANTHROPIC_DEFAULT_SONNET_MODEL as the fallback mapping
+  } else if (lowerModel.includes('sonnet')) {
+    // Only apply sonnet mapping when the model ID actually contains 'sonnet'.
+    // Non-Anthropic model names (e.g. 'qwen3.5-plus', 'deepseek-v3') should NOT be
+    // remapped to the sonnet setting, as they are already the intended model name.
     const mapped = userEnv.ANTHROPIC_DEFAULT_SONNET_MODEL;
     if (mapped && String(mapped).trim()) {
       return String(mapped).trim();
     }
   }
+  // For non-Anthropic model IDs that don't contain 'opus'/'haiku'/'sonnet',
+  // skip mapping and use the original model ID as-is.
 
   // No mapping configured, use original model ID
   return modelId;
@@ -79,6 +81,10 @@ export function resolveModelFromSettings(modelId, userEnv) {
  * Set SDK environment variables based on the model name.
  * The Claude SDK uses short names (opus/sonnet/haiku) as model selectors,
  * while the specific version is determined by ANTHROPIC_DEFAULT_*_MODEL environment variables.
+ *
+ * NOTE: This function mutates process.env as a side effect, which is required by the
+ * Claude SDK's model resolution mechanism. This is safe in the current single-request
+ * architecture but should be revisited if concurrent request handling is introduced.
  *
  * @param {string} modelId - The resolved model name to set as env var value (e.g. 'MiniMax-M2.5' or 'claude-opus-4-6')
  * @param {string} [baseModelId] - The original internal model ID used to determine which env var to set.

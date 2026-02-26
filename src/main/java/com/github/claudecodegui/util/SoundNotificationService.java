@@ -155,11 +155,11 @@ public class SoundNotificationService {
             normalized = normalized.substring(1, normalized.length() - 1);
         }
 
-        if (normalized.startsWith("file:/")) {
+        if (normalized.startsWith("file://")) {
             try {
-                normalized = new File(URI.create(normalized)).getPath();
+                normalized = new File(new URI(normalized)).getPath();
             } catch (Exception e) {
-                LOG.debug("[SoundNotification] Failed to parse file URI path: " + normalized);
+                LOG.warn("[SoundNotification] Failed to parse file URI: " + normalized + " - " + e.getMessage());
             }
         }
 
@@ -185,7 +185,7 @@ public class SoundNotificationService {
     }
 
     /**
-     * Check if the file path is safe (no path traversal, under user home or exact absolute path).
+     * Check if the file path is safe (no path traversal, must be under user home directory).
      */
     private boolean isPathSafe(String filePath) {
         try {
@@ -199,10 +199,10 @@ public class SoundNotificationService {
 
             File file = new File(normalizedPath);
             String canonical = file.getCanonicalPath();
-            String absolute = file.getAbsolutePath();
             String userHome = new File(System.getProperty("user.home")).getCanonicalPath();
 
-            return pathStartsWith(canonical, userHome) || pathEquals(canonical, absolute);
+            // Only allow files under user home directory to prevent arbitrary file access
+            return pathStartsWith(canonical, userHome);
         } catch (java.io.IOException e) {
             return false;
         }
@@ -272,6 +272,7 @@ public class SoundNotificationService {
             if (!latch.await(MP3_PLAYBACK_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 LOG.warn("[SoundNotification] MP3 playback timed out after " + MP3_PLAYBACK_TIMEOUT_SECONDS + "s");
                 player.close();
+                playThread.interrupt();
             }
         } catch (JavaLayerException e) {
             throw new Exception("Failed to decode MP3: " + e.getMessage(), e);

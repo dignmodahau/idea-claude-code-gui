@@ -126,6 +126,10 @@ export function useFileTags({
      * 2. For each @, try to match against known paths in pathMappingRef
      * 3. Choose the longest matching path to handle filenames with spaces correctly
      * 4. Fall back to simple regex matching for paths not in pathMappingRef
+     *
+     * Performance: O(N * M * L) where N = number of '@' in text, M = pathMapping size,
+     * L = average path length (for startsWith checks). Acceptable for input box text
+     * (typically < 10 '@' references) and moderate project sizes (< 1000 path entries).
      */
     const matches: FileMatch[] = [];
 
