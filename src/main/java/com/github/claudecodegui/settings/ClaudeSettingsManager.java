@@ -12,6 +12,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -80,7 +81,7 @@ public class ClaudeSettingsManager {
             return createDefaultClaudeSettings();
         }
 
-        try (FileReader reader = new FileReader(settingsFile)) {
+        try (FileReader reader = new FileReader(settingsFile, StandardCharsets.UTF_8)) {
             return JsonParser.parseReader(reader).getAsJsonObject();
         } catch (Exception e) {
             LOG.warn("[ClaudeSettingsManager] Failed to read ~/.claude/settings.json: " + e.getMessage());
@@ -106,7 +107,7 @@ public class ClaudeSettingsManager {
         // Force-set to string value "1"
         env.addProperty("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1");
 
-        try (FileWriter writer = new FileWriter(settingsPath.toFile())) {
+        try (FileWriter writer = new FileWriter(settingsPath.toFile(), StandardCharsets.UTF_8)) {
             gson.toJson(settings, writer);
             LOG.info("[ClaudeSettingsManager] Synced settings to: " + settingsPath);
         }
@@ -130,7 +131,7 @@ public class ClaudeSettingsManager {
             }
 
             JsonObject claudeJson;
-            try (FileReader reader = new FileReader(claudeJsonFile)) {
+            try (FileReader reader = new FileReader(claudeJsonFile, StandardCharsets.UTF_8)) {
                 claudeJson = JsonParser.parseReader(reader).getAsJsonObject();
             } catch (Exception e) {
                 LOG.error("[ClaudeSettingsManager] Failed to parse ~/.claude.json: " + e.getMessage(), e);

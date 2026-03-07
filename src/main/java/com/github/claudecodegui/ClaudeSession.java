@@ -16,9 +16,10 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Computable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -508,7 +509,7 @@ public class ClaudeSession {
     }
 
     private String resolveTerminalContent(String safeName) {
-        return ReadAction.compute(() -> {
+        return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
             try {
                 List<Object> widgets = TerminalMonitorService.getWidgets(project);
                 LOG.debug("[Terminal] Resolving: " + safeName + ". Available widgets: " + widgets.size());
@@ -542,7 +543,7 @@ public class ClaudeSession {
     }
 
     private String resolveServiceContent(String safeName) {
-        return ReadAction.compute(() -> {
+        return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
             try {
                 List<RunConfigMonitorService.RunConfigInfo> configs = RunConfigMonitorService.getRunConfigurations(project);
                 LOG.debug("[Service] Resolving: " + safeName + ". Available configs: " + configs.size());

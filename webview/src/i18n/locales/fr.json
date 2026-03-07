@@ -1119,9 +1119,9 @@
         "label": "gpt-5.3-codex",
         "description": "Dernier modèle de codage agentique avec des capacités améliorées."
       },
-      "gpt53": {
-        "label": "gpt-5.3",
-        "description": "Dernier modèle de pointe avec des améliorations significatives."
+      "gpt54": {
+        "label": "gpt-5.4",
+        "description": "Dernier modèle de pointe avec des capacités améliorées."
       },
       "gpt52codex": {
         "label": "gpt-5.2-codex",
@@ -1134,10 +1134,6 @@
       "gpt51codexMini": {
         "label": "gpt-5.1-codex-mini",
         "description": "Optimisé pour Codex. Moins cher et plus rapide, mais moins performant."
-      },
-      "gpt52": {
-        "label": "gpt-5.2",
-        "description": "Dernier modèle de pointe avec des améliorations en connaissances."
       }
     }
   },

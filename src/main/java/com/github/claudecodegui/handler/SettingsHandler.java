@@ -95,6 +95,8 @@ public class SettingsHandler extends BaseMessageHandler {
         MODEL_CONTEXT_LIMITS.put("claude-opus-4-6", 200_000);
         MODEL_CONTEXT_LIMITS.put("claude-haiku-4-5", 200_000);
         // Codex/OpenAI models
+        MODEL_CONTEXT_LIMITS.put("gpt-5.4", 1_000_000);
+        MODEL_CONTEXT_LIMITS.put("gpt-5.3-codex", 258_000);
         MODEL_CONTEXT_LIMITS.put("gpt-5.2-codex", 258_000);
         MODEL_CONTEXT_LIMITS.put("gpt-5.1-codex-max", 258_000);
         MODEL_CONTEXT_LIMITS.put("gpt-5.1-codex-mini", 258_000);

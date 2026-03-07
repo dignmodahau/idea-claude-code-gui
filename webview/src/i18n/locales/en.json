@@ -1228,9 +1228,9 @@
         "label": "gpt-5.3-codex",
         "description": "Latest frontier agentic coding model with enhanced capabilities."
       },
-      "gpt53": {
-        "label": "gpt-5.3",
-        "description": "Latest frontier model with significant improvements."
+      "gpt54": {
+        "label": "gpt-5.4",
+        "description": "Latest frontier model with enhanced capabilities."
       },
       "gpt52codex": {
         "label": "gpt-5.2-codex",
@@ -1243,10 +1243,6 @@
       "gpt51codexMini": {
         "label": "gpt-5.1-codex-mini",
         "description": "Optimized for codex. Cheaper, faster, but less capable."
-      },
-      "gpt52": {
-        "label": "gpt-5.2",
-        "description": "Latest frontier model with improvements across knowledge."
       }
     }
   },

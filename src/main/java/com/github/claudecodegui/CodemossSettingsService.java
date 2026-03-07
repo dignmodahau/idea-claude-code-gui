@@ -15,6 +15,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -184,7 +185,7 @@ public class CodemossSettingsService {
             return createDefaultConfig();
         }
 
-        try (FileReader reader = new FileReader(configFile)) {
+        try (FileReader reader = new FileReader(configFile, StandardCharsets.UTF_8)) {
             JsonObject config = JsonParser.parseReader(reader).getAsJsonObject();
             LOG.info("[CodemossSettings] Successfully read config from: " + configPath);
             return config;
@@ -204,7 +205,7 @@ public class CodemossSettingsService {
         backupConfig();
 
         String configPath = getConfigPath();
-        try (FileWriter writer = new FileWriter(configPath)) {
+        try (FileWriter writer = new FileWriter(configPath, StandardCharsets.UTF_8)) {
             gson.toJson(config, writer);
             LOG.info("[CodemossSettings] Successfully wrote config to: " + configPath);
         } catch (Exception e) {
