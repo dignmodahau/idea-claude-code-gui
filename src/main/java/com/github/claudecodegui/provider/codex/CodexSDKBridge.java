@@ -38,6 +38,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
     private static final String APPROVAL_POLICY_ON_REQUEST = "on-request";
     private static final String APPROVAL_POLICY_UNTRUSTED = "untrusted";
     private static final String ENV_CODEX_APPROVAL_POLICY = "CODEX_APPROVAL_POLICY";
+    private static final String ENV_CODEX_SANDBOX_MODE = "CODEX_SANDBOX_MODE";
     private static final String ENV_CODEX_SANDBOX = "CODEX_SANDBOX";
     private static final String ENV_CODEX_CI = "CODEX_CI";
     private static final String ENV_CODEX_SANDBOX_NETWORK_DISABLED = "CODEX_SANDBOX_NETWORK_DISABLED";
@@ -331,26 +332,32 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
                     switch (permissionMode) {
                         case "bypassPermissions":
+                            env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
                             env.put(ENV_CODEX_SANDBOX, sandboxMode);
                             env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_NEVER);
                             break;
                         case "acceptEdits":
+                        case "autoEdit":
+                            env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
                             env.put(ENV_CODEX_SANDBOX, sandboxMode);
                             env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_ON_REQUEST);
                             break;
                         case "plan":
+                            env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
                             env.put(ENV_CODEX_SANDBOX, sandboxMode);
                             env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_UNTRUSTED);
                             break;
                         default:
                             // Default mode: use configured sandbox mode with confirmation
+                            env.put(ENV_CODEX_SANDBOX_MODE, sandboxMode);
                             env.put(ENV_CODEX_SANDBOX, sandboxMode);
                             env.put(ENV_CODEX_APPROVAL_POLICY, APPROVAL_POLICY_UNTRUSTED);
                             break;
                     }
                     LOG.info("[Codex] Permission env override: SANDBOX_MODE=" +
-                            env.get("CODEX_SANDBOX_MODE") + ", APPROVAL_POLICY=" +
-                            env.get("CODEX_APPROVAL_POLICY") + " (from permissionMode=" + permissionMode +
+                            env.get(ENV_CODEX_SANDBOX_MODE) + ", SANDBOX=" +
+                            env.get(ENV_CODEX_SANDBOX) + ", APPROVAL_POLICY=" +
+                            env.get(ENV_CODEX_APPROVAL_POLICY) + " (from permissionMode=" + permissionMode +
                             ")");
                 }
 
@@ -360,7 +367,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 // Configure Codex-specific env vars from ~/.codex/config.toml
                 envConfigurator.configureCodexEnv(env);
                 LOG.info("[Codex] Final Node permission env snapshot: CODEX_SANDBOX_MODE=" +
-                        env.get(ENV_CODEX_APPROVAL_POLICY) + ", CODEX_SANDBOX=" +
+                        env.get(ENV_CODEX_SANDBOX_MODE) + ", CODEX_SANDBOX=" +
                         env.get(ENV_CODEX_SANDBOX) + ", CODEX_CI=" + env.get(ENV_CODEX_CI) +
                         ", CODEX_SANDBOX_NETWORK_DISABLED=" + env.get(ENV_CODEX_SANDBOX_NETWORK_DISABLED) +
                         ", CLAUDE_SESSION_ID=" + env.get("CLAUDE_SESSION_ID") +
@@ -763,7 +770,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
      * Falls back to platform defaults when settings are unavailable or invalid.
      */
     private String resolveCodexSandboxMode(String cwd) {
-        String defaultMode = SANDBOX_MODE_WORKSPACE_WRITE;
+        String defaultMode = SANDBOX_MODE_DANGER_FULL_ACCESS;
 
         try {
             CodemossSettingsService settingsService = new CodemossSettingsService();

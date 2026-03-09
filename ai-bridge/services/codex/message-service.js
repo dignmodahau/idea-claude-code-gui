@@ -114,6 +114,25 @@ function buildCodexCliEnvironment(baseEnv) {
   return { cliEnv, removedKeys };
 }
 
+function normalizeCodexPermissionMode(mode) {
+  if (typeof mode !== 'string') {
+    return 'default';
+  }
+  const trimmed = mode.trim();
+  if (!trimmed) {
+    return 'default';
+  }
+  if (trimmed === 'autoEdit') {
+    return 'acceptEdits';
+  }
+  return trimmed;
+}
+
+function isAutoEditPermissionMode(mode) {
+  const normalized = normalizeCodexPermissionMode(mode);
+  return normalized === 'acceptEdits';
+}
+
 const isReconnectNotice = (message) =>
   typeof message === 'string' && /Reconnecting\.\.\./i.test(message);
 
@@ -579,10 +598,12 @@ export async function sendMessage(
   attachments = []
 ) {
   try {
+    const normalizedPermissionMode = normalizeCodexPermissionMode(permissionMode || 'default');
+
     console.log('[DEBUG] Codex sendMessage called with params:', {
       threadId,
       cwd,
-      permissionMode,
+      permissionMode: normalizedPermissionMode,
       model,
       reasoningEffort,
       hasBaseUrl: !!baseUrl,
@@ -627,9 +648,7 @@ export async function sendMessage(
     // 2. Map Unified Permission Mode to Codex Format
     // ============================================================
 
-    const permissionConfig = CodexPermissionMapper.toProvider(
-      permissionMode || 'default'
-    );
+    const permissionConfig = CodexPermissionMapper.toProvider(normalizedPermissionMode);
 
     console.log('[PERM_DEBUG] Codex permission config:', permissionConfig);
     console.log('[PERM_DEBUG] Raw env permission overrides:', {
@@ -698,7 +717,7 @@ export async function sendMessage(
 
     // Final configuration log for debugging
     console.log('[PERM_DEBUG] Final Codex threadOptions:', {
-      permissionMode: permissionMode,
+      permissionMode: normalizedPermissionMode,
       workingDirectory: threadOptions.workingDirectory,
       sandboxMode: threadOptions.sandboxMode,
       approvalPolicy: threadOptions.approvalPolicy,
@@ -782,8 +801,8 @@ export async function sendMessage(
     const reasoningTextCache = new Map();
     let reasoningObserved = false;
     let runtimePolicyLogged = false;
-    let patchApprovalBridgeNoticeSent = false;
     let commandApprovalAbortRequested = false;
+    const COMMAND_DENIED_ABORT_ERROR = '__CODEX_COMMAND_DENIED_ABORT__';
     let suppressNoResponseFallback = false;
 
     const emitMessage = (msg) => {
@@ -1429,7 +1448,7 @@ export async function sendMessage(
       emitDeniedCommandToolResultOnce(toolUseId, 'Command denied by user and turn aborted');
       emitMessage({
         type: 'status',
-        message: '审批拒绝：已中断命令执行'
+        message: '审批拒绝：已发出中断请求（命令可能已启动）'
       });
 
       commandApprovalAbortRequested = true;
@@ -1561,7 +1580,9 @@ export async function sendMessage(
               });
               if (!allowed) {
                 logWarn('PERM_DEBUG', `Command denied by approval bridge: ${command}`);
-                break;
+                // Stop consuming additional events immediately. AbortSignal is still sent above,
+                // but this hard break avoids processing follow-up tool executions in the same turn.
+                throw new Error(COMMAND_DENIED_ABORT_ERROR);
               }
             }
           // Handle MCP tool call started
@@ -1706,15 +1727,9 @@ export async function sendMessage(
             // As a fallback, bridge to the plugin-side approval dialog so users can still
             // see approval flow and reject write results.
             const shouldBridgeApproval = !isError &&
+              !isAutoEditPermissionMode(normalizedPermissionMode) &&
               (threadOptions.approvalPolicy && threadOptions.approvalPolicy !== 'never');
             if (shouldBridgeApproval && patchBatches.length > 0) {
-              if (!patchApprovalBridgeNoticeSent) {
-                emitMessage({
-                  type: 'status',
-                  message: '已启用插件侧审批桥接（Codex 运行时审批可能被宿主策略降级）'
-                });
-                patchApprovalBridgeNoticeSent = true;
-              }
               deniedCallIds = await requestPatchApprovalsViaBridge(patchBatches);
               if (deniedCallIds.size > 0) {
                 rollbackByCallId = rollbackDeniedPatchBatches(patchBatches, deniedCallIds);
@@ -1887,7 +1902,10 @@ export async function sendMessage(
       }
     } catch (streamError) {
       const streamErrorMessage = streamError?.message || String(streamError);
-      if (commandApprovalAbortRequested && /aborted|abort|cancel|interrupt/i.test(streamErrorMessage)) {
+      if (commandApprovalAbortRequested && (
+        streamErrorMessage === COMMAND_DENIED_ABORT_ERROR ||
+        /aborted|abort|cancel|interrupt/i.test(streamErrorMessage)
+      )) {
         logInfo('PERM_DEBUG', `Suppress streamed turn abort after command denial: ${streamErrorMessage}`);
       } else {
         throw streamError;

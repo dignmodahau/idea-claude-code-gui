@@ -470,6 +470,20 @@ public class PermissionService {
     }
 
     /**
+     * Clear all remembered permission decisions for this window/session scope.
+     * Used when creating a new chat session or loading a history session so
+     * approvals do not leak across conversation boundaries.
+     */
+    public void clearDecisionMemory() {
+        int paramLevelSize = permissionMemory.size();
+        int toolLevelSize = toolOnlyPermissionMemory.size();
+        permissionMemory.clear();
+        toolOnlyPermissionMemory.clear();
+        debugLog("MEMORY_CLEAR", "Cleared decision memory: paramLevel=" + paramLevelSize
+                + ", toolLevel=" + toolLevelSize + ", sessionId=" + sessionId);
+    }
+
+    /**
      * Generic method to match a project by working directory.
      * Extracts cwd from the request and finds the corresponding project.
      *

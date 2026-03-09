@@ -1366,14 +1366,14 @@ public class ClaudeSession {
 
         // Sync PermissionManager mode with frontend mode:
         // - "default" -> DEFAULT (ask every time)
-        // - "acceptEdits" -> ACCEPT_EDITS (agent mode, auto-accept file edits)
+        // - "acceptEdits"/"autoEdit" -> ACCEPT_EDITS (agent mode, auto-accept file edits)
         // - "bypassPermissions" -> ALLOW_ALL (auto mode, bypass all permission checks)
         // - "plan" -> DENY_ALL (plan mode, not yet supported)
         PermissionManager.PermissionMode pmMode;
         if ("bypassPermissions".equals(mode)) {
             pmMode = PermissionManager.PermissionMode.ALLOW_ALL;
             LOG.info("Permission mode set to ALLOW_ALL for mode: " + mode);
-        } else if ("acceptEdits".equals(mode)) {
+        } else if ("acceptEdits".equals(mode) || "autoEdit".equals(mode)) {
             pmMode = PermissionManager.PermissionMode.ACCEPT_EDITS;
             LOG.info("Permission mode set to ACCEPT_EDITS for mode: " + mode);
         } else if ("plan".equals(mode)) {

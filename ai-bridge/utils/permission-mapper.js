@@ -56,8 +56,8 @@ function normalizeUnifiedMode(mode) {
     return { core: UnifiedPermissionMode.YOLO, alias: 'bypassPermissions' };
   }
 
-  // acceptEdits (Agent Mode): auto-apply file modifications, commands still require confirmation
-  if (normalized === 'acceptedits') {
+  // acceptEdits / autoEdit (Agent Mode): auto-apply file modifications, commands still require confirmation
+  if (normalized === 'acceptedits' || normalized === 'autoedit') {
     return { core: UnifiedPermissionMode.DEFAULT, alias: 'acceptEdits' };
   }
 
