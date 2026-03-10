@@ -13,6 +13,70 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: '0.2.7',
+    date: '2026-03-10',
+    content: {
+      en: `✨ Features
+- Project-level prompt storage: dual-scope prompt management (global + project), store project prompts in \`.codemoss/prompt.json\` for team sharing via Git, separate UI sections with full CRUD, chat autocomplete with scope labels (#598) #hpstream
+- Codex mode enhancements: suggest (approval) mode, per-conversation permission isolation, separate Codex/Claude Code config UI, agent config and diff editor panel in Codex mode (#571) #tonyshengbo
+- Improve Codex tool rendering with smart classification and file navigation (#607) #gadfly3173
+- Add AUTO_ALLOW_TOOLS category and improve plan mode permissions (#609) #gadfly3173
+- Add Agent tool alias for Task in plan mode (#615) #gadfly3173
+- Add provider sorting functionality with drag-and-drop reorder (#617) #fanchenggang
+- Add apiKeyHelper support for enterprise authentication (#623) #bdelamarre
+- Update Codex model list: add gpt-5.4, remove gpt-5.2/gpt-5.3
+
+🐛 Fixes
+- Fix Codex stdio MCP server status stays on pending: add handshake request (#499) #pwang1984
+- Fix Windows sound path issue for completion notification (#553) #z231485
+- Prepend configured Node.js path to ensure version priority (#587) #gadfly3173
+- Resolve session transition races, streaming stability, and error deduplication (#600) #gadfly3173
+- Enhance SDK update and version handling (#602) #gadfly3173
+- Add runtime session epoch isolation to prevent ghost messages (#611) #gadfly3173
+- Fix context menu cut function and enhance file tag handling (#625) #JackCmd233
+- Enforce UTF-8 charset for all file I/O operations
+- Replace experimental IntelliJ APIs with stable alternatives
+- Harden Codex path resolution and improve sandbox defaults
+
+🔧 Improvements
+- Refactor PromptManager to AbstractPromptManager with template methods, GlobalPromptManager, ProjectPromptManager, PromptManagerFactory (#598) #hpstream
+- Extract shared provider sorting logic to reduce duplication
+- Extract shared command tool names and improve parsing robustness
+- Extract apiKeyHelper detection and add missing i18n keys
+- Replace hardcoded VSCode variables with design tokens in dialogs
+- Improve code quality with thread safety, defensive copying, and log cleanup`,
+      zh: `✨ Features
+- 项目级别提示词存储：双作用域提示词管理（全局 + 项目），项目提示词存储在 \`.codemoss/prompt.json\` 文件中可通过 Git 团队共享，全局和项目提示词分区展示并支持完整增删改查，聊天自动补全带作用域标签 (#598) #hpstream
+- Codex 模式增强：支持 suggest（审批）模式、会话级独立权限审批、拆分 Codex 和 Claude Code 配置界面、Codex 模式下智能体配置和 diff 编辑面板 (#571) #tonyshengbo
+- 改进 Codex 工具渲染：智能分类和文件导航 (#607) #gadfly3173
+- 新增 AUTO_ALLOW_TOOLS 类别并改进 Plan 模式权限 (#609) #gadfly3173
+- Plan 模式支持 Agent 工具作为 Task 的别名 (#615) #gadfly3173
+- 新增 Provider 排序功能：支持拖拽排序 (#617) #fanchenggang
+- 新增 apiKeyHelper 企业认证支持 (#623) #bdelamarre
+- 更新 Codex 模型列表：新增 gpt-5.4，移除 gpt-5.2/gpt-5.3
+
+🐛 Fixes
+- 修复 Codex stdio MCP 服务器状态持续 pending 问题 (#499) #pwang1984
+- 修复 Windows 平台设置完成语音路径问题 (#553) #z231485
+- 修复配置的 Node.js 路径优先级 (#587) #gadfly3173
+- 修复会话切换竞态、流式稳定性和错误去重 (#600) #gadfly3173
+- 增强 SDK 更新和版本处理 (#602) #gadfly3173
+- 新增运行时会话 epoch 隔离以防止幽灵消息 (#611) #gadfly3173
+- 修复上下文菜单剪切功能并增强文件标签处理 (#625) #JackCmd233
+- 强制所有文件 I/O 操作使用 UTF-8 编码
+- 替换实验性 IntelliJ API 为稳定替代方案
+- 加固 Codex 路径解析并改进沙箱默认值
+
+🔧 Improvements
+- 重构 PromptManager 为 AbstractPromptManager 抽象基类 (#598) #hpstream
+- 提取共享的 Provider 排序逻辑以减少重复代码
+- 提取共享命令工具名称并改进解析健壮性
+- 提取 apiKeyHelper 检测逻辑并补充缺失的 i18n 键
+- 将对话框中硬编码的 VSCode 变量替换为设计令牌
+- 改进代码质量：线程安全、防御性拷贝和日志清理`,
+    },
+  },
+  {
     version: '0.2.6',
     date: '2026-03-05',
     content: {

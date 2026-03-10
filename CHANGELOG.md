@@ -1,16 +1,68 @@
-##### **2026年3月7日（v0.2.7）**
+##### **2026年3月10日（v0.2.7）**
 
 English:
 
 ✨ Features
-- Project-level prompt storage: dual-scope prompt management (global + project), store project prompts in `.codemoss/prompt.json` within project root for team sharing via Git, separate UI sections for global and project prompts with complete CRUD operations (create, read, update, delete), import/export support for both scopes, "Copy to Global" feature for project prompts, chat autocomplete displays both scopes with labels ([Global]/[Project]), multi-project support showing only active project prompts
-- Abstract prompt manager architecture: refactor PromptManager to AbstractPromptManager base class with template methods, GlobalPromptManager for `~/.codemoss/prompt.json`, ProjectPromptManager for `<project>/.codemoss/prompt.json`, PromptManagerFactory for scope-based manager creation, PromptScope enum (GLOBAL/PROJECT), backward-compatible API with deprecated methods defaulting to global scope
+- Project-level prompt storage: dual-scope prompt management (global + project), store project prompts in `.codemoss/prompt.json` within project root for team sharing via Git, separate UI sections for global and project prompts with complete CRUD operations, import/export support for both scopes, chat autocomplete displays both scopes with labels ([Global]/[Project]) (#598) #hpstream
+- Codex mode enhancements: support suggest (approval) mode, isolate permission approval for each conversation, separate Codex and Claude Code configuration UI, open agent configuration in Codex mode, adapt diff editor panel for Codex mode, fix MCP configuration page state (#571) #tonyshengbo
+- Improve Codex tool rendering with smart classification and file navigation (#607) #gadfly3173
+- Add AUTO_ALLOW_TOOLS category and improve plan mode permissions: auto-allow safe tools without user prompt (#609) #gadfly3173
+- Add Agent tool alias for Task in plan mode (#615) #gadfly3173
+- Add provider sorting functionality: drag-and-drop reorder for providers (#617) #fanchenggang
+- Add apiKeyHelper support for enterprise authentication: detect managed-settings.json for enterprise API key configuration (#623) #bdelamarre
+- Update Codex model list: add gpt-5.4 and remove gpt-5.2/gpt-5.3
+
+🐛 Fixes
+- Fix Codex stdio MCP server status that stays on pending: add handshake request for stdio MCP server (#499) #pwang1984
+- Fix Windows sound path issue for completion notification (#553) #z231485
+- Prepend configured Node.js path to ensure version priority over system default (#587) #gadfly3173
+- Resolve session transition races, streaming stability, and error deduplication (#600) #gadfly3173
+- Enhance SDK update and version handling: add --include=optional flag to npm install (#602) #gadfly3173
+- Add runtime session epoch isolation to prevent ghost messages (#611) #gadfly3173
+- Fix context menu cut function and enhance file tag handling (#625) #JackCmd233
+- Enforce UTF-8 charset for all file I/O operations
+- Replace experimental IntelliJ APIs with stable alternatives
+- Harden Codex path resolution and improve sandbox defaults: add path traversal guard
+
+🔧 Improvements
+- Refactor PromptManager to AbstractPromptManager base class with template methods, GlobalPromptManager, ProjectPromptManager, and PromptManagerFactory (#598) #hpstream
+- Extract shared provider sorting logic to reduce duplication
+- Extract shared command tool names and improve parsing robustness
+- Extract apiKeyHelper detection and add missing i18n keys
+- Replace hardcoded VSCode variables with design tokens in dialogs
+- Improve code quality with thread safety, defensive copying, and log cleanup
 
 中文：
 
 ✨ Features
-- 项目级别提示词存储：双作用域提示词管理（全局 + 项目），项目提示词存储在项目根目录的 `.codemoss/prompt.json` 文件中可通过 Git 团队共享，全局和项目提示词分区展示并支持完整的增删改查操作，两个作用域均支持导入/导出功能，项目提示词支持 "复制到全局" 功能，聊天自动补全同时显示两种作用域并带标签区分（[全局]/[项目]），多项目支持仅显示当前活动项目的提示词
-- 抽象提示词管理架构：PromptManager 重构为 AbstractPromptManager 抽象基类并使用模板方法，GlobalPromptManager 管理 `~/.codemoss/prompt.json`，ProjectPromptManager 管理 `<project>/.codemoss/prompt.json`，PromptManagerFactory 用于基于作用域创建管理器，PromptScope 枚举（GLOBAL/PROJECT），向后兼容 API 通过废弃方法默认使用全局作用域
+- 项目级别提示词存储：双作用域提示词管理（全局 + 项目），项目提示词存储在项目根目录的 `.codemoss/prompt.json` 文件中可通过 Git 团队共享，全局和项目提示词分区展示并支持完整的增删改查操作，两个作用域均支持导入/导出功能，聊天自动补全同时显示两种作用域并带标签区分（[全局]/[项目]）(#598) #hpstream
+- Codex 模式增强：支持 suggest（审批）模式、会话级独立权限审批、拆分 Codex 和 Claude Code 配置界面、开放 Codex 模式下的智能体配置、适配 Codex 模式 diff 编辑面板、修复 MCP 配置页面状态 (#571) #tonyshengbo
+- 改进 Codex 工具渲染：智能分类和文件导航 (#607) #gadfly3173
+- 新增 AUTO_ALLOW_TOOLS 类别并改进 Plan 模式权限：安全工具免确认自动允许 (#609) #gadfly3173
+- Plan 模式支持 Agent 工具作为 Task 的别名 (#615) #gadfly3173
+- 新增 Provider 排序功能：支持拖拽排序 (#617) #fanchenggang
+- 新增 apiKeyHelper 企业认证支持：检测 managed-settings.json 中的企业 API Key 配置 (#623) #bdelamarre
+- 更新 Codex 模型列表：新增 gpt-5.4，移除 gpt-5.2/gpt-5.3
+
+🐛 Fixes
+- 修复 Codex stdio MCP 服务器状态持续 pending 问题：为 stdio MCP 服务器添加握手请求 (#499) #pwang1984
+- 修复 Windows 平台设置完成语音路径问题 (#553) #z231485
+- 修复配置的 Node.js 路径优先级：将用户配置路径前置以覆盖系统默认版本 (#587) #gadfly3173
+- 修复会话切换竞态、流式稳定性和错误去重 (#600) #gadfly3173
+- 增强 SDK 更新和版本处理：npm install 添加 --include=optional 参数 (#602) #gadfly3173
+- 新增运行时会话 epoch 隔离以防止幽灵消息 (#611) #gadfly3173
+- 修复上下文菜单剪切功能并增强文件标签处理 (#625) #JackCmd233
+- 强制所有文件 I/O 操作使用 UTF-8 编码
+- 替换实验性 IntelliJ API 为稳定替代方案
+- 加固 Codex 路径解析并改进沙箱默认值：添加路径遍历防护
+
+🔧 Improvements
+- 重构 PromptManager 为 AbstractPromptManager 抽象基类，提供模板方法、GlobalPromptManager、ProjectPromptManager 和 PromptManagerFactory (#598) #hpstream
+- 提取共享的 Provider 排序逻辑以减少重复代码
+- 提取共享命令工具名称并改进解析健壮性
+- 提取 apiKeyHelper 检测逻辑并补充缺失的 i18n 键
+- 将对话框中硬编码的 VSCode 变量替换为设计令牌
+- 改进代码质量：线程安全、防御性拷贝和日志清理
 
 ---
 
