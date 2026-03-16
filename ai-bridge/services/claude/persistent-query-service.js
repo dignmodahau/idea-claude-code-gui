@@ -636,10 +636,12 @@ function touchRuntime(runtime) {
  */
 function canDisposeIdleRuntime(runtime, now, maxIdleMs) {
   if (!runtime || runtime.closed) return false;
+  if (now - runtime.createdAt > RUNTIME_MAX_ABSOLUTE_LIFETIME_MS) return true;
   if ((runtime.activeTurnCount || 0) > 0) return false;
   return now - runtime.lastUsedAt > maxIdleMs;
 }
 
+const RUNTIME_MAX_ABSOLUTE_LIFETIME_MS = 6 * 60 * 60 * 1000; // 6 hours
 const ANONYMOUS_RUNTIME_MAX_IDLE_MS = 10 * 60 * 1000; // 10 minutes
 const SESSION_RUNTIME_MAX_IDLE_MS = 30 * 60 * 1000; // 30 minutes
 const SESSION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -831,7 +833,6 @@ async function executeTurn(runtime, requestContext, turnMeta) {
   }
 
   activeTurnRuntime = runtime;
-  beginRuntimeTurn(runtime);
   console.log('[LIFECYCLE] executeTurn sessionId=' + (requestContext.requestedSessionId || runtime.sessionId || '(new)')
     + ' epoch=' + (requestContext.runtimeSessionEpoch || runtime.runtimeSessionEpoch || '(none)'));
 
@@ -850,6 +851,7 @@ async function executeTurn(runtime, requestContext, turnMeta) {
   }
 
   try {
+    beginRuntimeTurn(runtime);
     console.log('[MESSAGE_START]');
     runtime.inputStream.enqueue(requestContext.userMessage);
 
@@ -863,14 +865,13 @@ async function executeTurn(runtime, requestContext, turnMeta) {
         throw wrapped;
       }
 
-      touchRuntime(runtime);
-
       if (next.done) {
         const err = new Error('Claude session stream ended unexpectedly');
         err.runtimeTerminated = true;
         throw err;
       }
 
+      touchRuntime(runtime);
       const msg = next.value;
 
       if (turnState.streamingEnabled && !turnState.streamStarted) {
