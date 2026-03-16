@@ -198,6 +198,29 @@ public class CodexHistoryReader {
             // 3b. Full scan
             LOG.info("[CodexHistoryReader] Full scan for Codex sessions");
             sessions = scanAllSessions();
+
+            // 3c. Preserve existing titles from the old index.
+            // During a FULL scan, generateTitle() re-derives titles from the first
+            // user message.  If the old index already recorded a title for a session,
+            // keep it so that custom titles (overlaid later by enhanceHistoryWithTitles)
+            // and stable auto-generated titles are not needlessly overwritten.
+            if (projectIndex != null && !projectIndex.sessions.isEmpty()) {
+                Map<String, String> existingTitles = new HashMap<>();
+                for (SessionIndexManager.SessionIndexEntry entry : projectIndex.sessions) {
+                    if (entry.title != null && !entry.title.isEmpty()) {
+                        existingTitles.put(entry.sessionId, entry.title);
+                    }
+                }
+                if (!existingTitles.isEmpty()) {
+                    for (SessionInfo session : sessions) {
+                        String oldTitle = existingTitles.get(session.sessionId);
+                        if (oldTitle != null) {
+                            session.title = oldTitle;
+                        }
+                    }
+                    LOG.info("[CodexHistoryReader] Preserved " + existingTitles.size() + " existing titles from old index");
+                }
+            }
         }
 
         long scanTime = System.currentTimeMillis() - startTime;

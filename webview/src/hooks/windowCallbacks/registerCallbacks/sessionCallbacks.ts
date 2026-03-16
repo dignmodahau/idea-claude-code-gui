@@ -8,7 +8,6 @@
 
 import type { MutableRefObject } from 'react';
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
-import { sendBridgeEvent } from '../../../utils/bridge';
 import { downloadJSON } from '../../../utils/exportMarkdown';
 import { releaseSessionTransition } from '../sessionTransition';
 import { drainAndRequestDependencyStatus } from '../settingsBootstrap';
@@ -36,12 +35,12 @@ export function registerSessionAndSdkCallbacks(
     setCurrentSessionId(sessionId);
 
     // B-011 + B-014: Persist custom title under the real SDK session ID.
+    // NOTE: We intentionally do NOT delete the old ID's title to prevent
+    // data loss when Codex creates new threads for continued conversations.
+    // Orphaned title entries are harmless and cleaned up on session deletion.
     const title = customSessionTitleRef.current;
-    if (title) {
+    if (title && oldId !== sessionId) {
       updateHistoryTitle(sessionId, title);
-      if (oldId && oldId !== sessionId) {
-        sendBridgeEvent('delete_title', oldId);
-      }
     }
   };
 

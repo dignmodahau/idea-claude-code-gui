@@ -40,13 +40,15 @@ function loadTitles() {
 }
 
 /**
- * 保存标题数据
+ * 保存标题数据（原子写入：先写临时文件再 rename，防止写入中途崩溃导致数据丢失）
  * @param {Object} titles - 标题数据
  */
 function saveTitles(titles) {
   try {
     ensureTitlesDir();
-    fs.writeFileSync(TITLES_FILE, JSON.stringify(titles, null, 2), 'utf-8');
+    const tmpFile = TITLES_FILE + '.tmp';
+    fs.writeFileSync(tmpFile, JSON.stringify(titles, null, 2), 'utf-8');
+    fs.renameSync(tmpFile, TITLES_FILE);
   } catch (error) {
     console.error('[SessionTitles] Failed to save titles:', error.message);
     throw error;

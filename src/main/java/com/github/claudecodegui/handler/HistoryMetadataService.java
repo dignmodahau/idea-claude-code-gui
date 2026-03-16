@@ -4,13 +4,23 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Service for managing session metadata: favorites and custom titles.
+ *
+ * Title operations are serialized via a lock to prevent concurrent
+ * read-modify-write races on session-titles.json.
  */
 class HistoryMetadataService {
 
     private static final Logger LOG = Logger.getInstance(HistoryMetadataService.class);
+
+    /**
+     * Serializes all title file operations to prevent concurrent
+     * read-modify-write races on session-titles.json.
+     */
+    private final ReentrantLock titleFileLock = new ReentrantLock();
 
     private final HandlerContext context;
     private final NodeJsServiceCaller nodeJsServiceCaller;
@@ -44,6 +54,7 @@ class HistoryMetadataService {
      */
     void handleUpdateTitle(String content) {
         CompletableFuture.runAsync(() -> {
+            titleFileLock.lock();
             try {
                 LOG.info("[HistoryHandler] ========== 更新会话标题 ==========");
 
@@ -81,6 +92,8 @@ class HistoryMetadataService {
                                             "}";
                     context.executeJavaScriptOnEDT(jsCode);
                 });
+            } finally {
+                titleFileLock.unlock();
             }
         });
     }
@@ -90,12 +103,15 @@ class HistoryMetadataService {
      */
     void handleDeleteTitle(String sessionId) {
         CompletableFuture.runAsync(() -> {
+            titleFileLock.lock();
             try {
                 LOG.info("[HistoryHandler] Deleting orphaned title for sessionId: " + sessionId);
                 String result = nodeJsServiceCaller.callNodeJsDeleteTitle(sessionId);
                 LOG.info("[HistoryHandler] Delete title result: " + result);
             } catch (Exception e) {
                 LOG.warn("[HistoryHandler] Failed to delete orphaned title: " + e.getMessage());
+            } finally {
+                titleFileLock.unlock();
             }
         });
     }
