@@ -30,7 +30,7 @@ checkstyle {
 }
 
 group = 'com.github.jetbrains-long-gui'
-version = '0.2.9'
+version = '0.3'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17

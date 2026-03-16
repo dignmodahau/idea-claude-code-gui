@@ -68,9 +68,17 @@ class HistoryMessageInjector {
                 context.getSession().setSessionInfo(threadIdToUse, cwd);
                 LOG.info("[HistoryHandler] 恢复 Codex 会话状态: threadId=" + threadIdToUse + " (from sessionId=" + sessionId + "), cwd=" + cwd);
 
-                // Clear current messages
+                // Clear current messages and release session transition guard
+                // so that addHistoryMessage() calls below are not blocked.
+                // The guard was set by beginSessionTransition() in the frontend;
+                // for Claude sessions setSessionId() releases it, but Codex
+                // sessions inject messages directly via addHistoryMessage().
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    context.executeJavaScriptOnEDT("if (window.clearMessages) { window.clearMessages(); }");
+                    context.executeJavaScriptOnEDT(
+                        "if (window.clearMessages) { window.clearMessages(); } " +
+                        "window.__sessionTransitioning = false; " +
+                        "window.__sessionTransitionToken = null;"
+                    );
                 });
 
                 // Convert Codex messages to frontend format and inject one by one
