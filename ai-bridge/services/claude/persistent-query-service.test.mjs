@@ -3,6 +3,20 @@ import assert from 'node:assert/strict';
 
 import { __testing } from './persistent-query-service.js';
 
+/**
+ * Create a Promise that can be manually resolved.
+ * @returns {{ promise: Promise, resolve: Function, reject: Function }}
+ */
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function createQueryFactory() {
   const runtimes = [];
   return {
@@ -20,6 +34,40 @@ function createQueryFactory() {
         },
         async next() {
           return { done: true, value: undefined };
+        }
+      };
+      runtimes.push(runtime);
+      return runtime;
+    }
+  };
+}
+
+/**
+ * Create a query factory that returns next() results in sequence.
+ * @param {Array<(() => Promise<{done: boolean, value?: any}>) | {done: boolean, value?: any}>} steps
+ */
+function createSequencedQueryFactory(steps) {
+  const runtimes = [];
+  return {
+    runtimes,
+    queryFn({ prompt, options }) {
+      let index = 0;
+      const runtime = {
+        prompt,
+        options,
+        closed: false,
+        setPermissionMode: async () => {},
+        setModel: async () => {},
+        setMaxThinkingTokens: async () => {},
+        close() {
+          this.closed = true;
+        },
+        async next() {
+          const step = steps[index++];
+          if (!step) {
+            return { done: false, value: { type: 'result', is_error: false } };
+          }
+          return typeof step === 'function' ? await step() : step;
         }
       };
       runtimes.push(runtime);
@@ -143,4 +191,138 @@ test('restore-history continuation keeps runtime bound to restored session after
 
   assert.equal(restoredRuntime, restoredRuntimeAgain);
   assert.equal(__testing.getRuntimeForSession('hist-restore'), restoredRuntime);
+});
+
+test('active session runtime is not disposed by idle cleanup while a turn is executing', async () => {
+  const nextDeferred = createDeferred();
+  const enteredDeferred = createDeferred();
+  const factory = createSequencedQueryFactory([
+    async () => {
+      enteredDeferred.resolve();
+      return nextDeferred.promise;
+    },
+    { done: false, value: { type: 'result', is_error: false } }
+  ]);
+  __testing.setQueryFn(factory.queryFn);
+
+  const context = await __testing.buildRequestContext({
+    sessionId: 'session-active',
+    runtimeSessionEpoch: 'epoch-active',
+    cwd: process.cwd(),
+    message: 'long running turn'
+  }, false);
+  const runtime = await __testing.acquireRuntime(context);
+  runtime.lastUsedAt = Date.now() - (31 * 60 * 1000);
+
+  const turnPromise = __testing.executeTurn(runtime, context);
+  await enteredDeferred.promise;
+
+  await __testing.cleanupSessionRuntimes();
+
+  assert.equal(runtime.closed, false);
+  assert.equal(__testing.getRuntimeForSession('session-active'), runtime);
+
+  nextDeferred.resolve({ done: false, value: { type: 'assistant', message: { content: [{ type: 'text', text: 'done' }] } } });
+  await turnPromise;
+});
+
+test('idle session runtime is still disposed by idle cleanup', async () => {
+  const factory = createQueryFactory();
+  __testing.setQueryFn(factory.queryFn);
+
+  const context = await __testing.buildRequestContext({
+    sessionId: 'session-idle',
+    runtimeSessionEpoch: 'epoch-idle',
+    cwd: process.cwd(),
+    message: 'idle turn'
+  }, false);
+  const runtime = await __testing.acquireRuntime(context);
+  runtime.lastUsedAt = Date.now() - (31 * 60 * 1000);
+
+  await __testing.cleanupSessionRuntimes();
+
+  assert.equal(runtime.closed, true);
+  assert.equal(__testing.getRuntimeForSession('session-idle'), null);
+});
+
+test('active anonymous runtime is not disposed by idle cleanup while a turn is executing', async () => {
+  const nextDeferred = createDeferred();
+  const enteredDeferred = createDeferred();
+  const factory = createSequencedQueryFactory([
+    async () => {
+      enteredDeferred.resolve();
+      return nextDeferred.promise;
+    },
+    { done: false, value: { type: 'result', is_error: false } }
+  ]);
+  __testing.setQueryFn(factory.queryFn);
+
+  const context = await __testing.buildRequestContext({
+    sessionId: '',
+    runtimeSessionEpoch: 'epoch-anon-active',
+    cwd: process.cwd(),
+    message: 'anonymous long running turn'
+  }, false);
+  const runtime = await __testing.acquireRuntime(context);
+  runtime.lastUsedAt = Date.now() - (11 * 60 * 1000);
+
+  const turnPromise = __testing.executeTurn(runtime, context);
+  await enteredDeferred.promise;
+
+  await __testing.cleanupAnonymousRuntimes();
+
+  assert.equal(runtime.closed, false);
+  assert.equal(__testing.getSnapshot().anonymousRuntimeCount, 1);
+
+  nextDeferred.resolve({ done: false, value: { type: 'assistant', message: { content: [{ type: 'text', text: 'done' }] } } });
+  await turnPromise;
+});
+
+test('executeTurn refreshes lastUsedAt while processing query events', async () => {
+  const factory = createSequencedQueryFactory([
+    { done: false, value: { type: 'assistant', message: { content: [{ type: 'text', text: 'partial' }] } } },
+    { done: false, value: { type: 'result', is_error: false } }
+  ]);
+  __testing.setQueryFn(factory.queryFn);
+
+  const context = await __testing.buildRequestContext({
+    sessionId: 'session-refresh',
+    runtimeSessionEpoch: 'epoch-refresh',
+    cwd: process.cwd(),
+    message: 'refresh lastUsedAt'
+  }, false);
+  const runtime = await __testing.acquireRuntime(context);
+  runtime.lastUsedAt = 1;
+
+  await __testing.executeTurn(runtime, context);
+
+  assert.ok(runtime.lastUsedAt > 1);
+});
+
+test('abortCurrentTurn still disposes an active runtime explicitly', async () => {
+  const nextDeferred = createDeferred();
+  const enteredDeferred = createDeferred();
+  const factory = createSequencedQueryFactory([
+    async () => {
+      enteredDeferred.resolve();
+      return nextDeferred.promise;
+    }
+  ]);
+  __testing.setQueryFn(factory.queryFn);
+
+  const context = await __testing.buildRequestContext({
+    sessionId: 'session-abort',
+    runtimeSessionEpoch: 'epoch-abort',
+    cwd: process.cwd(),
+    message: 'abort me'
+  }, false);
+  const runtime = await __testing.acquireRuntime(context);
+  const turnPromise = __testing.executeTurn(runtime, context);
+  await enteredDeferred.promise;
+
+  await __testing.abortCurrentTurn();
+  nextDeferred.reject(new Error('runtime terminated'));
+
+  await assert.rejects(turnPromise, /runtime terminated/);
+  assert.equal(runtime.closed, true);
 });

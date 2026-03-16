@@ -449,6 +449,7 @@ async function disposeRuntime(runtime) {
     + ' epoch=' + (runtime.runtimeSessionEpoch || '(none)')
     + ' signature=' + (runtime.runtimeSignature || '(none)'));
   runtime.closed = true;
+  runtime.activeTurnCount = 0;
 
   try {
     runtime.inputStream.done();
@@ -488,6 +489,7 @@ async function createRuntime(requestContext) {
     currentMaxThinkingTokens: requestContext.maxThinkingTokens ?? null,
     createdAt: Date.now(),
     lastUsedAt: Date.now(),
+    activeTurnCount: 0,
     stderrLines: [],
     query: null,
     inputStream: new AsyncStream()
@@ -598,6 +600,46 @@ function assertRuntimeOwnership(runtime, requestContext) {
   }
 }
 
+/**
+ * Mark runtime as executing a turn for idle cleanup to skip active sessions.
+ * @param {object} runtime
+ */
+function beginRuntimeTurn(runtime) {
+  if (!runtime) return;
+  runtime.activeTurnCount = (runtime.activeTurnCount || 0) + 1;
+}
+
+/**
+ * Clean up runtime execution state to avoid stale state after exception or explicit termination.
+ * @param {object} runtime
+ */
+function endRuntimeTurn(runtime) {
+  if (!runtime) return;
+  runtime.activeTurnCount = Math.max((runtime.activeTurnCount || 0) - 1, 0);
+}
+
+/**
+ * Refresh runtime lease time to extend its lifetime.
+ * @param {object} runtime
+ */
+function touchRuntime(runtime) {
+  if (!runtime || runtime.closed) return;
+  runtime.lastUsedAt = Date.now();
+}
+
+/**
+ * Unified idle cleanup check: only reclaim truly idle and timed-out runtimes.
+ * @param {object} runtime
+ * @param {number} now Current timestamp
+ * @param {number} maxIdleMs Maximum idle time in milliseconds
+ * @returns {boolean}
+ */
+function canDisposeIdleRuntime(runtime, now, maxIdleMs) {
+  if (!runtime || runtime.closed) return false;
+  if ((runtime.activeTurnCount || 0) > 0) return false;
+  return now - runtime.lastUsedAt > maxIdleMs;
+}
+
 const ANONYMOUS_RUNTIME_MAX_IDLE_MS = 10 * 60 * 1000; // 10 minutes
 const SESSION_RUNTIME_MAX_IDLE_MS = 30 * 60 * 1000; // 30 minutes
 const SESSION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -610,8 +652,25 @@ async function cleanupStaleAnonymousRuntimes() {
       anonymousRuntimes.delete(runtime);
       continue;
     }
-    if (now - runtime.lastUsedAt > ANONYMOUS_RUNTIME_MAX_IDLE_MS) {
+    if (canDisposeIdleRuntime(runtime, now, ANONYMOUS_RUNTIME_MAX_IDLE_MS)) {
       console.log(`[DAEMON] Disposing stale anonymous runtime (idle ${Math.round((now - runtime.lastUsedAt) / 1000)}s)`);
+      await disposeRuntime(runtime);
+    }
+  }
+}
+
+/**
+ * Clean up timed-out session runtimes, skipping runtimes still executing.
+ */
+async function cleanupStaleSessionRuntimes() {
+  const now = Date.now();
+  for (const [sessionId, runtime] of runtimesBySessionId.entries()) {
+    if (runtime.closed) {
+      runtimesBySessionId.delete(sessionId);
+      continue;
+    }
+    if (canDisposeIdleRuntime(runtime, now, SESSION_RUNTIME_MAX_IDLE_MS)) {
+      console.log(`[DAEMON] Disposing stale session runtime ${sessionId} (idle ${Math.round((now - runtime.lastUsedAt) / 1000)}s)`);
       await disposeRuntime(runtime);
     }
   }
@@ -620,17 +679,7 @@ async function cleanupStaleAnonymousRuntimes() {
 // Background cleanup of idle session runtimes, decoupled from the request hot path.
 // Runs every 5 minutes instead of on every acquireRuntime call to avoid O(n) scans.
 const _sessionCleanupTimer = setInterval(async () => {
-  const now = Date.now();
-  for (const [sessionId, runtime] of runtimesBySessionId.entries()) {
-    if (runtime.closed) {
-      runtimesBySessionId.delete(sessionId);
-      continue;
-    }
-    if (now - runtime.lastUsedAt > SESSION_RUNTIME_MAX_IDLE_MS) {
-      console.log(`[DAEMON] Disposing stale session runtime ${sessionId} (idle ${Math.round((now - runtime.lastUsedAt) / 1000)}s)`);
-      await disposeRuntime(runtime);
-    }
-  }
+  await cleanupStaleSessionRuntimes();
 }, SESSION_CLEANUP_INTERVAL_MS);
 // unref() so the timer does not prevent natural process exit
 _sessionCleanupTimer.unref();
@@ -668,7 +717,7 @@ async function acquireRuntime(requestContext) {
 
   assertRuntimeOwnership(runtime, requestContext);
   await applyDynamicControls(runtime, requestContext);
-  runtime.lastUsedAt = Date.now();
+  touchRuntime(runtime);
   return runtime;
 }
 
@@ -782,6 +831,7 @@ async function executeTurn(runtime, requestContext, turnMeta) {
   }
 
   activeTurnRuntime = runtime;
+  beginRuntimeTurn(runtime);
   console.log('[LIFECYCLE] executeTurn sessionId=' + (requestContext.requestedSessionId || runtime.sessionId || '(new)')
     + ' epoch=' + (requestContext.runtimeSessionEpoch || runtime.runtimeSessionEpoch || '(none)'));
 
@@ -799,84 +849,89 @@ async function executeTurn(runtime, requestContext, turnMeta) {
     turnMeta.state = turnState;
   }
 
-  console.log('[MESSAGE_START]');
-  runtime.inputStream.enqueue(requestContext.userMessage);
+  try {
+    console.log('[MESSAGE_START]');
+    runtime.inputStream.enqueue(requestContext.userMessage);
 
-  while (true) {
-    let next;
-    try {
-      next = await runtime.query.next();
-    } catch (error) {
-      const wrapped = new Error(error?.message || String(error));
-      wrapped.runtimeTerminated = true;
-      throw wrapped;
-    }
-
-    if (next.done) {
-      const err = new Error('Claude session stream ended unexpectedly');
-      err.runtimeTerminated = true;
-      throw err;
-    }
-
-    const msg = next.value;
-
-    if (turnState.streamingEnabled && !turnState.streamStarted) {
-      process.stdout.write('[STREAM_START]\n');
-      turnState.streamStarted = true;
-    }
-
-    if (msg?.type === 'stream_event' && turnState.streamingEnabled) {
-      turnState.hasStreamEvents = true;
-      processStreamEvent(msg, turnState);
-      continue;
-    }
-
-    if (shouldOutputMessage(msg, turnState)) {
-      console.log('[MESSAGE]', JSON.stringify(msg));
-    }
-
-    processMessageContent(msg, turnState);
-    emitUsageTag(msg);
-    processToolResultMessages(msg);
-
-    if (msg?.type === 'system' && msg.session_id) {
-      turnState.finalSessionId = msg.session_id;
-      console.log('[SESSION_ID]', msg.session_id);
-      registerRuntimeSession(runtime, msg.session_id);
-    }
-
-    if (msg?.type === 'result') {
-      if (msg.is_error) {
-        throw new Error(msg.result || msg.message || 'API request failed');
+    while (true) {
+      let next;
+      try {
+        next = await runtime.query.next();
+      } catch (error) {
+        const wrapped = new Error(error?.message || String(error));
+        wrapped.runtimeTerminated = true;
+        throw wrapped;
       }
-      break;
+
+      touchRuntime(runtime);
+
+      if (next.done) {
+        const err = new Error('Claude session stream ended unexpectedly');
+        err.runtimeTerminated = true;
+        throw err;
+      }
+
+      const msg = next.value;
+
+      if (turnState.streamingEnabled && !turnState.streamStarted) {
+        process.stdout.write('[STREAM_START]\n');
+        turnState.streamStarted = true;
+      }
+
+      if (msg?.type === 'stream_event' && turnState.streamingEnabled) {
+        turnState.hasStreamEvents = true;
+        processStreamEvent(msg, turnState);
+        continue;
+      }
+
+      if (shouldOutputMessage(msg, turnState)) {
+        console.log('[MESSAGE]', JSON.stringify(msg));
+      }
+
+      processMessageContent(msg, turnState);
+      emitUsageTag(msg);
+      processToolResultMessages(msg);
+
+      if (msg?.type === 'system' && msg.session_id) {
+        turnState.finalSessionId = msg.session_id;
+        console.log('[SESSION_ID]', msg.session_id);
+        registerRuntimeSession(runtime, msg.session_id);
+      }
+
+      if (msg?.type === 'result') {
+        if (msg.is_error) {
+          throw new Error(msg.result || msg.message || 'API request failed');
+        }
+        break;
+      }
+    }
+
+    if (turnState.streamingEnabled && turnState.streamStarted && !turnState.streamEnded) {
+      // Emit final accumulated usage before stream end
+      if (turnState.accumulatedUsage) {
+        emitAccumulatedUsage(turnState.accumulatedUsage);
+      }
+      process.stdout.write('[STREAM_END]\n');
+      turnState.streamEnded = true;
+    }
+
+    const finalSessionId = turnState.finalSessionId || runtime.sessionId || requestContext.requestedSessionId || '';
+    if (finalSessionId) {
+      registerRuntimeSession(runtime, finalSessionId);
+    }
+
+    console.log('[MESSAGE_END]');
+    console.log(JSON.stringify({
+      success: true,
+      sessionId: finalSessionId
+    }));
+  } finally {
+    endRuntimeTurn(runtime);
+    // Only clear if this runtime still owns the pointer (not cleared by abort)
+    if (activeTurnRuntime === runtime) {
+      activeTurnRuntime = null;
     }
   }
-
-  if (turnState.streamingEnabled && turnState.streamStarted && !turnState.streamEnded) {
-    // Emit final accumulated usage before stream end
-    if (turnState.accumulatedUsage) {
-      emitAccumulatedUsage(turnState.accumulatedUsage);
-    }
-    process.stdout.write('[STREAM_END]\n');
-    turnState.streamEnded = true;
-  }
-
-  // Only clear if this runtime still owns the pointer (not cleared by abort)
-  if (activeTurnRuntime === runtime) {
-    activeTurnRuntime = null;
-  }
-
-  const finalSessionId = turnState.finalSessionId || runtime.sessionId || requestContext.requestedSessionId || '';
-  if (finalSessionId) {
-    registerRuntimeSession(runtime, finalSessionId);
-  }
-
-  console.log('[MESSAGE_END]');
-  console.log(JSON.stringify({
-    success: true,
-    sessionId: finalSessionId
-  }));
 }
 
 function emitSendError(runtime, error, requestContext) {
@@ -1018,8 +1073,20 @@ export const __testing = {
   async acquireRuntime(requestContext) {
     return acquireRuntime(requestContext);
   },
+  async executeTurn(runtime, requestContext, turnMeta = null) {
+    return executeTurn(runtime, requestContext, turnMeta);
+  },
+  async cleanupAnonymousRuntimes() {
+    return cleanupStaleAnonymousRuntimes();
+  },
+  async cleanupSessionRuntimes() {
+    return cleanupStaleSessionRuntimes();
+  },
   async resetRuntimePersistent(params = {}) {
     return resetRuntimePersistent(params);
+  },
+  async abortCurrentTurn() {
+    return abortCurrentTurn();
   },
   setActiveTurnRuntime(runtime) {
     activeTurnRuntime = runtime;
