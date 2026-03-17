@@ -22,7 +22,7 @@ public class SessionSendService {
 
     private final Project project;
     private final SessionState state;
-    private final CallbackHandler callbackHandler;
+    private final SessionCallbackFacade callbackFacade;
     private final MessageParser messageParser;
     private final MessageMerger messageMerger;
     private final Gson gson;
@@ -33,7 +33,7 @@ public class SessionSendService {
     public SessionSendService(
             Project project,
             SessionState state,
-            CallbackHandler callbackHandler,
+            SessionCallbackFacade callbackFacade,
             MessageParser messageParser,
             MessageMerger messageMerger,
             Gson gson,
@@ -43,7 +43,7 @@ public class SessionSendService {
     ) {
         this.project = project;
         this.state = state;
-        this.callbackHandler = callbackHandler;
+        this.callbackFacade = callbackFacade;
         this.messageParser = messageParser;
         this.messageMerger = messageMerger;
         this.gson = gson;
@@ -59,7 +59,7 @@ public class SessionSendService {
 
     public void updateSessionStateForSend(ClaudeSession.Message userMessage, String normalizedInput) {
         state.addMessage(userMessage);
-        callbackHandler.notifyMessageUpdate(state.getMessages());
+        callbackFacade.notifyMessageUpdate(state.getMessages());
 
         if (state.getSummary() == null) {
             String baseSummary = (userMessage.content != null && !userMessage.content.isEmpty())
@@ -67,7 +67,7 @@ public class SessionSendService {
                     : normalizedInput;
             String newSummary = baseSummary.length() > 45 ? baseSummary.substring(0, 45) + "..." : baseSummary;
             state.setSummary(newSummary);
-            callbackHandler.notifySummaryReceived(newSummary);
+            callbackFacade.notifySummaryReceived(newSummary);
         }
 
         state.updateLastModifiedTime();
@@ -75,7 +75,7 @@ public class SessionSendService {
         state.setBusy(true);
         state.setLoading(true);
         ClaudeNotifier.setWaiting(project);
-        callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
+        callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
     }
 
     public CompletableFuture<Void> sendMessageToProvider(
@@ -165,7 +165,7 @@ public class SessionSendService {
             List<String> fileTagPaths,
             String effectivePermissionMode
     ) {
-        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackFacade.getCallbackHandler());
         String contextAppend = contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
         String finalInput = (input != null ? input : "") + contextAppend;
 
@@ -194,7 +194,7 @@ public class SessionSendService {
         ClaudeMessageHandler handler = new ClaudeMessageHandler(
                 project,
                 state,
-                callbackHandler,
+                callbackFacade.getCallbackHandler(),
                 messageParser,
                 messageMerger,
                 gson

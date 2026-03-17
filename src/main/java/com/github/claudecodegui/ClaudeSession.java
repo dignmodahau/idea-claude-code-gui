@@ -4,16 +4,13 @@ import com.github.claudecodegui.permission.PermissionManager;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
-import com.github.claudecodegui.handler.SettingsHandler;
-import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.session.SessionContextService;
+import com.github.claudecodegui.session.SessionCallbackFacade;
+import com.github.claudecodegui.session.SessionMessageOrchestrator;
 import com.github.claudecodegui.session.SessionProviderRouter;
 import com.github.claudecodegui.session.SessionSendService;
 import com.github.claudecodegui.session.SessionState;
-import com.github.claudecodegui.util.TokenUsageUtils;
 import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -51,9 +48,10 @@ public class ClaudeSession {
     private final SessionContextService contextService;
     private final SessionProviderRouter providerRouter;
     private final SessionSendService sendService;
+    private final SessionMessageOrchestrator messageOrchestrator;
 
-    // Callback handler
-    private final com.github.claudecodegui.session.CallbackHandler callbackHandler;
+    // Callback facade
+    private final SessionCallbackFacade callbackFacade;
 
     // SDK bridges
     private final ClaudeSDKBridge claudeSDKBridge;
@@ -137,13 +135,13 @@ public class ClaudeSession {
         this.messageParser = new com.github.claudecodegui.session.MessageParser();
         this.messageMerger = new com.github.claudecodegui.session.MessageMerger();
         this.contextCollector = new com.github.claudecodegui.session.EditorContextCollector(project);
-        this.callbackHandler = new com.github.claudecodegui.session.CallbackHandler();
+        this.callbackFacade = new SessionCallbackFacade(project);
         this.contextService = new SessionContextService(project, MAX_FILE_SIZE_BYTES);
         this.providerRouter = new SessionProviderRouter(claudeSDKBridge, codexSDKBridge);
         this.sendService = new SessionSendService(
                 project,
                 state,
-                callbackHandler,
+                callbackFacade,
                 messageParser,
                 messageMerger,
                 gson,
@@ -151,15 +149,32 @@ public class ClaudeSession {
                 codexSDKBridge,
                 contextService
         );
+        this.messageOrchestrator = new SessionMessageOrchestrator(
+                project,
+                state,
+                messageParser,
+                callbackFacade,
+                new SessionMessageOrchestrator.SessionHistoryAccess() {
+                    @Override
+                    public List<JsonObject> getProviderSessionMessages(String provider, String sessionId, String cwd) {
+                        return providerRouter.getSessionMessages(provider, sessionId, cwd);
+                    }
+
+                    @Override
+                    public List<JsonObject> getClaudeSessionMessages(String sessionId, String cwd) {
+                        return claudeSDKBridge.getSessionMessages(sessionId, cwd);
+                    }
+                }
+        );
 
         // Set up permission manager callback
         permissionManager.setOnPermissionRequestedCallback(request -> {
-            callbackHandler.notifyPermissionRequested(request);
+            callbackFacade.notifyPermissionRequested(request);
         });
     }
 
     public void setCallback(SessionCallback callback) {
-        callbackHandler.setCallback(callback);
+        callbackFacade.setCallback(callback);
     }
 
     public com.github.claudecodegui.session.EditorContextCollector getContextCollector() {
@@ -265,7 +280,7 @@ public class ClaudeSession {
                             // Validate sessionId format (should be UUID format)
                             if (!newSessionId.contains("/") && !newSessionId.contains("\\")) {
                                 state.setSessionId(newSessionId);
-                                callbackHandler.notifySessionIdReceived(newSessionId);
+                                callbackFacade.notifySessionIdReceived(newSessionId);
                             } else {
                                 LOG.warn("Ignoring invalid sessionId: " + newSessionId);
                             }
@@ -275,7 +290,7 @@ public class ClaudeSession {
                     } catch (Exception e) {
                         state.setError(e.getMessage());
                         state.setChannelId(null);
-                        updateState();
+                        callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
                         throw new RuntimeException("Failed to launch: " + e.getMessage(), e);
                     }
                 }).orTimeout(com.github.claudecodegui.config.TimeoutConfig.QUICK_OPERATION_TIMEOUT,
@@ -287,7 +302,7 @@ public class ClaudeSession {
                         LOG.warn(timeoutMsg);
                         state.setError(timeoutMsg);
                         state.setChannelId(null);
-                        updateState();
+                        callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
                         throw new RuntimeException(timeoutMsg);
                     }
                     throw new RuntimeException(ex.getCause());
@@ -401,159 +416,13 @@ public class ClaudeSession {
             state.setError(ex.getMessage());
             state.setBusy(false);
             state.setLoading(false);
-            updateState();
+            callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
             return null;
         });
     }
 
     private CompletableFuture<Void> syncUserMessageUuidsAfterSend() {
-        if ("codex".equals(state.getProvider())) {
-            return CompletableFuture.completedFuture(null);
-        }
-
-        return CompletableFuture.runAsync(() -> {
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            updateUserMessageUuids();
-        });
-    }
-
-    /**
-     * Update user message UUIDs from session history
-     * This is needed because SDK streaming does not include UUID,
-     * but persisted messages in JSONL files do have UUID.
-     */
-    private void updateUserMessageUuids() {
-        String sessionId = state.getSessionId();
-        String cwd = state.getCwd();
-
-        if (sessionId == null || sessionId.isEmpty()) {
-            return;
-        }
-
-        // Retry logic to handle filesystem I/O delay
-        int maxRetries = 3;
-        int retryDelayMs = 50;
-
-        for (int attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-                List<JsonObject> historyMessages = claudeSDKBridge.getSessionMessages(sessionId, cwd);
-                if (historyMessages == null || historyMessages.isEmpty()) {
-                    if (attempt < maxRetries) {
-                        Thread.sleep(retryDelayMs);
-                        continue;
-                    }
-                    return;
-                }
-
-                List<Message> localMessages = state.getMessages();
-                boolean updated = false;
-
-                // Find user messages in history that have UUID
-                for (JsonObject historyMsg : historyMessages) {
-                    if (!historyMsg.has("type") || !"user".equals(historyMsg.get("type").getAsString())) {
-                        continue;
-                    }
-                    if (!historyMsg.has("uuid") || historyMsg.get("uuid").isJsonNull()) {
-                        continue;
-                    }
-
-                    String uuid = historyMsg.get("uuid").getAsString();
-
-                    // Extract content from history message for matching
-                    String historyContent = extractMessageContentForMatching(historyMsg);
-                    if (historyContent == null || historyContent.isEmpty()) {
-                        continue;
-                    }
-
-                    // Find matching local user message and update its UUID
-                    for (Message localMsg : localMessages) {
-                        if (localMsg.type != Message.Type.USER || localMsg.raw == null) {
-                            continue;
-                        }
-                        // Skip if already has UUID
-                        if (localMsg.raw.has("uuid") && !localMsg.raw.get("uuid").isJsonNull()) {
-                            continue;
-                        }
-
-                        String localContent = localMsg.content;
-                        if (localContent != null && localContent.equals(historyContent)) {
-                            localMsg.raw.addProperty("uuid", uuid);
-                            updated = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (updated) {
-                    callbackHandler.notifyMessageUpdate(localMessages);
-                    return; // Success, no need to retry
-                }
-
-                // If no update but found history messages, likely UUID already present
-                if (!historyMessages.isEmpty()) {
-                    return;
-                }
-
-                // Retry if no history messages found yet
-                if (attempt < maxRetries) {
-                    Thread.sleep(retryDelayMs);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            } catch (Exception e) {
-                LOG.warn("[Rewind] Failed to update user message UUIDs (attempt " + attempt + "): " + e.getMessage());
-                if (attempt >= maxRetries) {
-                    break;
-                }
-                try {
-                    Thread.sleep(retryDelayMs);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    return;
-                }
-            }
-        }
-    }
-
-    /**
-     * Extract message content for matching
-     */
-    private String extractMessageContentForMatching(JsonObject msg) {
-        if (!msg.has("message") || !msg.get("message").isJsonObject()) {
-            return null;
-        }
-        JsonObject message = msg.getAsJsonObject("message");
-        if (!message.has("content")) {
-            return null;
-        }
-
-        JsonElement contentElement = message.get("content");
-        if (contentElement.isJsonPrimitive()) {
-            return contentElement.getAsString();
-        }
-
-        if (contentElement.isJsonArray()) {
-            JsonArray contentArray = contentElement.getAsJsonArray();
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < contentArray.size(); i++) {
-                JsonElement element = contentArray.get(i);
-                if (element.isJsonObject()) {
-                    JsonObject block = element.getAsJsonObject();
-                    if (block.has("type") && "text".equals(block.get("type").getAsString()) && block.has("text")) {
-                        if (sb.length() > 0) sb.append("\n");
-                        sb.append(block.get("text").getAsString());
-                    }
-                }
-            }
-            return sb.toString();
-        }
-
-        return null;
+        return messageOrchestrator.syncUserMessageUuidsAfterSend();
     }
 
     /**
@@ -575,13 +444,13 @@ public class ClaudeSession {
                 // 1. The frontend's interruptSession() already cleans up streaming state directly
                 // 2. Calling notifyStreamEnd() would trigger flushStreamMessageUpdates(),
                 //    which might restore previous messages via lastMessagesSnapshot, interfering with clearMessages
-                // 3. State reset is notified via updateState() -> onStateChange()
+                // 3. State reset is notified via callbackFacade.notifyStateChange()
 
-                updateState();
+                callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
             } catch (Exception e) {
                 state.setError(e.getMessage());
                 state.setLoading(false);  // Also reset loading on error
-                updateState();
+                callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
             }
         });
     }
@@ -593,7 +462,7 @@ public class ClaudeSession {
         return interrupt().thenCompose(v -> {
             state.setChannelId(null);
             state.setBusy(false);
-            updateState();
+            callbackFacade.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
             return launchClaude().thenApply(chId -> null);
         });
     }
@@ -602,87 +471,7 @@ public class ClaudeSession {
      * Load message history from the server.
      */
     public CompletableFuture<Void> loadFromServer() {
-        if (state.getSessionId() == null) {
-            return CompletableFuture.completedFuture(null);
-        }
-
-        state.setLoading(true);
-        updateState();
-
-        return CompletableFuture.runAsync(() -> {
-            try {
-                String currentSessionId = state.getSessionId();
-                String currentCwd = state.getCwd();
-                String currentProvider = state.getProvider();
-
-                LOG.info("Loading session from server: sessionId=" + currentSessionId + ", cwd=" + currentCwd);
-                List<JsonObject> serverMessages =
-                        providerRouter.getSessionMessages(currentProvider, currentSessionId, currentCwd);
-                LOG.debug("Received " + serverMessages.size() + " messages from server");
-
-                state.clearMessages();
-                for (JsonObject msg : serverMessages) {
-                    Message message = messageParser.parseServerMessage(msg);
-                    if (message != null) {
-                        state.addMessage(message);
-                        // System.out.println("[ClaudeSession] Parsed message: type=" + message.type + ", content length=" + message.content.length());
-                    } else {
-                        // System.out.println("[ClaudeSession] Failed to parse message: " + msg);
-                    }
-                }
-
-                LOG.debug("Total messages in session: " + state.getMessages().size());
-
-                // Extract token usage from the last assistant message for status bar display
-                extractAndDisplayTokenUsage(serverMessages);
-
-                notifyMessageUpdate();
-            } catch (Exception e) {
-                LOG.error("Error loading session: " + e.getMessage(), e);
-                state.setError(e.getMessage());
-            } finally {
-                state.setLoading(false);
-                updateState();
-            }
-        });
-    }
-
-    /**
-     * Extract token usage from the last assistant message in loaded history
-     * and update the status bar.
-     */
-    private void extractAndDisplayTokenUsage(List<JsonObject> serverMessages) {
-        try {
-            JsonObject lastUsage = TokenUsageUtils.findLastUsageFromRawMessages(serverMessages);
-            if (lastUsage == null) return;
-
-            int usedTokens = TokenUsageUtils.extractUsedTokens(lastUsage, state.getProvider());
-            int maxTokens = SettingsHandler.getModelContextLimit(state.getModel());
-            ClaudeNotifier.setTokenUsage(project, usedTokens, maxTokens);
-            LOG.debug("Restored token usage from history: " + usedTokens + " / " + maxTokens);
-        } catch (Exception e) {
-            LOG.warn("Failed to extract token usage from history: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Notify callback of message updates.
-     */
-    private void notifyMessageUpdate() {
-        callbackHandler.notifyMessageUpdate(getMessages());
-    }
-
-    /**
-     * Notify callback of state changes.
-     */
-    private void updateState() {
-        callbackHandler.notifyStateChange(state.isBusy(), state.isLoading(), state.getError());
-
-        // Show error in status bar
-        String error = state.getError();
-        if (error != null && !error.isEmpty()) {
-            com.github.claudecodegui.notifications.ClaudeNotifier.showError(project, error);
-        }
+        return messageOrchestrator.loadFromServer();
     }
 
     /**
